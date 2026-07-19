@@ -1,0 +1,89 @@
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
+import { authenticate } from "../shopify.server";
+import { disconnectShop, getValidConnection } from "../qbo.server";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const connection = await getValidConnection(session.shop);
+
+  return {
+    connected: connection != null,
+    realmId: connection?.realmId ?? null,
+    connectUrl: `/app/qbo/connect?shop=${encodeURIComponent(session.shop)}`,
+  };
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  await disconnectShop(session.shop);
+  return { ok: true };
+};
+
+export default function Settings() {
+  const { connected, realmId, connectUrl } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
+  const isDisconnecting = fetcher.state !== "idle";
+
+  const disconnect = () => fetcher.submit({}, { method: "POST" });
+
+  // A plain link navigation to connectUrl can't carry custom headers, so it
+  // would hit ngrok's free-tier browser-warning interstitial (when the dev
+  // tunnel is ngrok) before ever reaching our loader. Fetching it instead
+  // lets us send `ngrok-skip-browser-warning`, then we open the returned
+  // Intuit URL directly — Intuit's domain isn't behind ngrok, so that hop
+  // is unaffected either way.
+  const connect = async () => {
+    // Open the window synchronously, in direct response to the click, so
+    // browsers (Safari in particular) don't treat it as a blocked popup —
+    // that guarantee is lost if window.open() is called after an await.
+    // It navigates to the real Intuit URL once the fetch below resolves.
+    const popup = window.open("", "_blank");
+
+    const response = await fetch(connectUrl, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    });
+    if (!response.ok) {
+      console.error("Failed to start QuickBooks connect:", await response.text());
+      popup?.close();
+      return;
+    }
+    const { authorizationUrl } = await response.json();
+    if (popup) {
+      popup.location.href = authorizationUrl;
+    } else {
+      window.open(authorizationUrl, "_blank");
+    }
+  };
+
+  return (
+    <s-page heading="Settings">
+      <s-section heading="QuickBooks Online">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            <s-badge tone={connected ? "success" : "neutral"}>
+              {connected ? "Connected" : "Not connected"}
+            </s-badge>
+          </s-paragraph>
+
+          {connected ? (
+            <>
+              <s-paragraph>
+                Company (realm) ID: <s-text>{realmId}</s-text>
+              </s-paragraph>
+              <s-button
+                variant="tertiary"
+                onClick={disconnect}
+                {...(isDisconnecting ? { loading: true } : {})}
+              >
+                Disconnect
+              </s-button>
+            </>
+          ) : (
+            <s-button onClick={connect}>Connect QuickBooks</s-button>
+          )}
+        </s-stack>
+      </s-section>
+    </s-page>
+  );
+}
