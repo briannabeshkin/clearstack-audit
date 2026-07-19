@@ -44,3 +44,16 @@ model QuickBooksConnection {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
+
+// One row per completed one-time Full Audit purchase, across all shops.
+// Exists so we can count total audits sold and switch from intro ($49) to
+// list ($79) pricing once the intro allotment is used up. chargeId is
+// Shopify's AppPurchaseOneTime id, unique so the same purchase never gets
+// counted twice across repeated report loads.
+model AuditPurchase {
+  id        String   @id @default(cuid())
+  shop      String
+  chargeId  String   @unique
+  amount    Float
+  createdAt DateTime @default(now())
+}

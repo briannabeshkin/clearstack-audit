@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
-import { authenticate, BILLING_IS_TEST, FULL_AUDIT_PLAN } from "../shopify.server";
+import { authenticate, BILLING_IS_TEST } from "../shopify.server";
+import {
+  FULL_AUDIT_INTRO_PRICE,
+  FULL_AUDIT_PLAN_INTRO,
+  FULL_AUDIT_PLAN_REGULAR,
+  FULL_AUDIT_REGULAR_PRICE,
+  type CurrentPlan,
+} from "../billing-shared";
+import { getCurrentPlan, recordPurchaseIfNew } from "../billing.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   fetchRecentOrders,
   fetchRecentPayouts,
-  type OrderRow,
   type PayoutRow,
 } from "../shopify-data.server";
 import {
@@ -22,7 +31,7 @@ import {
   settlementFindingImpact,
   type RevenueFinding,
   type SettlementFinding,
-} from "../reconcile.server";
+} from "../reconcile";
 import {
   describeRevenueFinding,
   describeSettlementFinding,
@@ -35,6 +44,20 @@ interface Fetched<T> {
   error: boolean;
 }
 
+// IMPORTANT: every external fetch (Shopify GraphQL, QuickBooks REST) must
+// be wrapped in safe()/safeValue() at the moment it's kicked off, not just
+// awaited inside a later try/catch. Kicking a promise off early for
+// concurrency, then only awaiting it after *other* awaits happen first
+// (e.g. another fetch's own await), leaves a window where the promise can
+// reject before anything is listening — Node treats that as an unhandled
+// rejection and can crash the whole process, even though a try/catch
+// exists further down the function. This actually happened: an
+// unhandled-scope GraphQL error from fetchRecentPayouts crashed the dev
+// server despite a try/catch around its later `await`, because
+// fetchRecentOrders' own await ran first and gave the rejection room to be
+// "unhandled" before the payouts try/catch ever executed. Catching inside
+// the same async call, before the promise is ever handed back to the
+// caller, closes that gap — the promises these return can never reject.
 async function safe<T>(fn: () => Promise<T[]>): Promise<Fetched<T>> {
   try {
     return { rows: await fn(), error: false };
@@ -43,24 +66,103 @@ async function safe<T>(fn: () => Promise<T[]>): Promise<Fetched<T>> {
   }
 }
 
+interface FetchedValue<T> {
+  value: T;
+  error: boolean;
+}
+
+// Same as safe(), for fetches that don't return an array (e.g. payouts,
+// which come back as { payouts, hasPayoutsAccount }).
+async function safeValue<T>(fn: () => Promise<T>, fallback: T): Promise<FetchedValue<T>> {
+  try {
+    return { value: await fn(), error: false };
+  } catch {
+    return { value: fallback, error: true };
+  }
+}
+
 const REPORT_CURRENCY = "USD";
 
 // The purchase is a one-time unlock, not a per-run charge — the merchant
-// pays $49 once and every future reload of this page shows the full
-// itemized report from then on, rather than being charged again each time
-// the data is re-pulled.
+// pays once and every future reload of this page shows the full itemized
+// report from then on, rather than being charged again each time the data
+// is re-pulled.
+//
+// Which plan gets requested is decided fresh here (not passed in from the
+// client), based on the current sold count — the same lookup the loader
+// uses to render the CTA copy. This is the actual charge, so it has to be
+// authoritative rather than trusting whatever price the page happened to
+// be showing when the merchant clicked.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
-  await billing.request({
-    plan: FULL_AUDIT_PLAN,
-    isTest: BILLING_IS_TEST,
-    returnUrl: `${process.env.SHOPIFY_APP_URL ?? ""}/app?shop=${encodeURIComponent(session.shop)}`,
-  });
-  // billing.request() always throws a redirect (to Shopify's confirmation
-  // page, or — for embedded XHR requests like this one — a 401 carrying
-  // App Bridge redirect headers that the client-side script turns into a
-  // top-level navigation). This line never actually runs.
-  return null;
+
+  let plan: CurrentPlan;
+  try {
+    plan = await getCurrentPlan();
+  } catch (error) {
+    // Most likely cause: the AuditPurchase table/Prisma client isn't in
+    // sync with schema.prisma yet (needs `npx prisma generate` +
+    // `npx prisma migrate dev` run locally) — getCurrentPlan() counts rows
+    // in that table to decide intro vs. regular pricing.
+    console.error("[billing action] getCurrentPlan() failed — plan lookup never reached Shopify:", {
+      shop: session.shop,
+      error,
+    });
+    throw error;
+  }
+
+  try {
+    await billing.request({
+      plan: plan.name,
+      isTest: BILLING_IS_TEST,
+      returnUrl: `${process.env.SHOPIFY_APP_URL ?? ""}/app?shop=${encodeURIComponent(session.shop)}`,
+    });
+    // billing.request() always throws on success too — a Response carrying
+    // the redirect to Shopify's confirmation page (or, for this embedded
+    // XHR call, a 401 with App Bridge redirect headers). This line never
+    // actually runs; the throw is caught below and re-raised untouched.
+    return null;
+  } catch (error) {
+    if (error instanceof Response) {
+      // The expected success path — not a failure. Let it propagate so
+      // React Router / App Bridge can turn it into the redirect.
+      throw error;
+    }
+
+    // A genuine failure requesting billing from Shopify. Common causes:
+    // `plan.name` doesn't match a key in the `billing` config in
+    // shopify.server.ts (e.g. the dev server wasn't restarted after that
+    // config changed), or Shopify's appPurchaseOneTimeCreate mutation
+    // returned userErrors (bad returnUrl, invalid amount, shop can't be
+    // charged, etc.) — those show up as a BillingError with `errorData`.
+    const details: Record<string, unknown> = {
+      timestamp: new Date().toISOString(),
+      shop: session.shop,
+      requestedPlan: plan.name,
+      isTest: BILLING_IS_TEST,
+      returnUrl: `${process.env.SHOPIFY_APP_URL ?? ""}/app?shop=${encodeURIComponent(session.shop)}`,
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+    if (error && typeof error === "object" && "errorData" in error) {
+      details.errorData = (error as { errorData: unknown }).errorData;
+    }
+
+    // The CLI's log panel has been swallowing/scrolling past plain
+    // console.error output for this, so write it straight to a file in the
+    // project root instead — no terminal scrollback needed, just read
+    // billing-debug.log directly. Best-effort: if the write itself fails
+    // for some reason, fall back to console.error rather than lose the
+    // failure entirely, and never let logging itself break the request.
+    const line = `${JSON.stringify(details)}\n`;
+    try {
+      appendFileSync(join(process.cwd(), "billing-debug.log"), line);
+    } catch {
+      console.error("[billing action] billing.request() failed:", details);
+    }
+
+    throw error;
+  }
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -73,48 +175,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const { accessToken, realmId } = connection;
 
-  // Kick every fetch off concurrently. Shopify and QBO are handled with
-  // their established patterns (try/catch and safe() respectively, matching
-  // app.quickbooks.tsx) so one failing source degrades its own section
-  // instead of taking down the whole report.
-  const ordersRequest = fetchRecentOrders(admin.graphql);
-  const payoutsRequest = fetchRecentPayouts(admin.graphql);
+  // Kick every fetch off concurrently, each wrapped in safe()/safeValue()
+  // immediately — see the comment on safe() above for why that has to
+  // happen right here, at creation, rather than in a try/catch around a
+  // later await. One failing source degrades its own section of the
+  // report instead of taking down the whole request.
+  const ordersRequest = safe(() => fetchRecentOrders(admin.graphql));
+  const payoutsRequest = safeValue(() => fetchRecentPayouts(admin.graphql), {
+    payouts: [] as PayoutRow[],
+    hasPayoutsAccount: false,
+  });
   const salesReceiptsRequest = safe(() => fetchSalesReceipts(accessToken, realmId));
   const invoicesRequest = safe(() => fetchInvoices(accessToken, realmId));
   const paymentsRequest = safe(() => fetchPayments(accessToken, realmId));
   const depositsRequest = safe(() => fetchDeposits(accessToken, realmId));
-  const billingRequest = billing.check({ plans: [FULL_AUDIT_PLAN], isTest: BILLING_IS_TEST });
 
-  let orders: OrderRow[] = [];
-  let ordersError = false;
-  try {
-    orders = await ordersRequest;
-  } catch {
-    ordersError = true;
-  }
+  const [ordersResult, payoutsResult, salesReceipts, invoices, payments, deposits] =
+    await Promise.all([
+      ordersRequest,
+      payoutsRequest,
+      salesReceiptsRequest,
+      invoicesRequest,
+      paymentsRequest,
+      depositsRequest,
+    ]);
 
-  let payouts: PayoutRow[] = [];
-  let hasPayoutsAccount = false;
-  let payoutsError = false;
-  try {
-    const result = await payoutsRequest;
-    payouts = result.payouts;
-    hasPayoutsAccount = result.hasPayoutsAccount;
-  } catch {
-    payoutsError = true;
-  }
-
-  const [salesReceipts, invoices, payments, deposits, { hasActivePayment }] = await Promise.all([
-    salesReceiptsRequest,
-    invoicesRequest,
-    paymentsRequest,
-    depositsRequest,
-    billingRequest,
-  ]);
+  const { payouts, hasPayoutsAccount } = payoutsResult.value;
 
   const dataErrors = {
-    orders: ordersError,
-    payouts: payoutsError,
+    orders: ordersResult.error,
+    payouts: payoutsResult.error,
     salesReceipts: salesReceipts.error,
     invoices: invoices.error,
     payments: payments.error,
@@ -123,7 +213,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dataIncomplete = Object.values(dataErrors).some(Boolean);
 
   const { revenue, settlement } = reconcile({
-    orders,
+    orders: ordersResult.rows,
     payouts,
     salesReceipts: salesReceipts.rows,
     invoices: invoices.rows,
@@ -151,22 +241,68 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const issueCount = missingOrders.length + duplicatesAndConflicts.length + payoutMismatches.length;
 
+  // A clean audit costs the merchant nothing — there's nothing to sell if
+  // we didn't find anything wrong. Skip billing entirely: no plan lookup,
+  // no billing.check() call, no charge, no CTA. This has to be decided
+  // before we touch billing at all, not just hidden in the UI afterward.
+  if (issueCount === 0) {
+    return {
+      connected: true as const,
+      clean: true as const,
+      matchedOrderCount,
+      matchedPayoutCount,
+      hasPayoutsAccount,
+      dataErrors,
+      dataIncomplete,
+    };
+  }
+
+  const breakdown = {
+    missingOrders: missingOrders.length,
+    duplicatesAndConflicts: duplicatesAndConflicts.length,
+    payoutMismatches: payoutMismatches.length,
+  };
+
+  const [currentPlan, { hasActivePayment, oneTimePurchases }] = await Promise.all([
+    getCurrentPlan(),
+    billing.check({
+      plans: [FULL_AUDIT_PLAN_INTRO, FULL_AUDIT_PLAN_REGULAR],
+      isTest: BILLING_IS_TEST,
+    }),
+  ]);
+
+  if (hasActivePayment) {
+    // Record the sale the first time we see it (recordPurchaseIfNew dedupes
+    // by charge id), so the sold count used for future intro/regular
+    // pricing decisions stays accurate. Every subsequent page load also
+    // hits this branch, but only the first one actually inserts a row.
+    const purchase = oneTimePurchases[0];
+    if (purchase) {
+      const amount =
+        purchase.name === FULL_AUDIT_PLAN_INTRO ? FULL_AUDIT_INTRO_PRICE : FULL_AUDIT_REGULAR_PRICE;
+      await recordPurchaseIfNew(session.shop, purchase.id, amount);
+    }
+  }
+
   const summary = {
     issueCount,
     totalImpact,
     matchedOrderCount,
     matchedPayoutCount,
+    breakdown,
   };
 
   if (!hasActivePayment) {
-    // Free preview: the summary numbers above are enough to show there's
-    // something worth paying to see, but the itemized findings — the actual
-    // product — are withheld from the response entirely rather than sent
-    // and merely hidden client-side.
+    // Free preview: the dollar total and issue breakdown are enough to show
+    // there's something worth paying to see, but the itemized findings —
+    // the actual product — are withheld from the response entirely rather
+    // than sent and merely hidden client-side.
     return {
       connected: true as const,
+      clean: false as const,
       unlocked: false as const,
       summary,
+      currentPlan,
       hasPayoutsAccount,
       dataErrors,
       dataIncomplete,
@@ -175,6 +311,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     connected: true as const,
+    clean: false as const,
     unlocked: true as const,
     summary,
     hasPayoutsAccount,
@@ -326,31 +463,63 @@ const MISSING_DATA_LABELS: Record<string, string> = {
   deposits: "QuickBooks deposits",
 };
 
-function PurchaseBanner({ issueCount }: { issueCount: number }) {
+function pluralize(count: number, singular: string, plural: string = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+interface PreviewSummary {
+  issueCount: number;
+  totalImpact: number;
+  breakdown: {
+    missingOrders: number;
+    duplicatesAndConflicts: number;
+    payoutMismatches: number;
+  };
+}
+
+// The free preview's whole job is to make the case for paying: lead with
+// the dollar figure (that's the entire conversion argument), name the
+// categories of problem without giving away specifics, then the CTA.
+function PurchaseBanner({
+  summary,
+  currentPlan,
+}: {
+  summary: PreviewSummary;
+  currentPlan: CurrentPlan;
+}) {
   const fetcher = useFetcher<typeof action>();
   const isRequesting = fetcher.state !== "idle";
+  const { issueCount, totalImpact, breakdown } = summary;
+
+  const breakdownParts = [
+    breakdown.missingOrders > 0 ? pluralize(breakdown.missingOrders, "missing order") : null,
+    breakdown.duplicatesAndConflicts > 0
+      ? pluralize(breakdown.duplicatesAndConflicts, "duplicate or conflicting record")
+      : null,
+    breakdown.payoutMismatches > 0 ? pluralize(breakdown.payoutMismatches, "payout mismatch") : null,
+  ].filter((part): part is string => part !== null);
+
+  const priceLabel = currentPlan.isIntro
+    ? `${formatMoney(currentPlan.price, REPORT_CURRENCY)} (intro price, regular ${formatMoney(FULL_AUDIT_REGULAR_PRICE, REPORT_CURRENCY)})`
+    : formatMoney(currentPlan.price, REPORT_CURRENCY);
 
   return (
     <s-section>
       <s-banner
-        heading={
-          issueCount === 0
-            ? "No discrepancies found in the free preview"
-            : `${issueCount} issue${issueCount === 1 ? "" : "s"} found`
-        }
-        tone={issueCount === 0 ? "success" : "warning"}
+        heading={`${formatMoney(totalImpact, REPORT_CURRENCY)} in discrepancies found across ${pluralize(issueCount, "issue")}`}
+        tone="warning"
       >
         <s-stack direction="block" gap="base">
+          <s-paragraph>{breakdownParts.join(", ")}.</s-paragraph>
           <s-paragraph>
-            The free preview shows how many issues were found and the total dollar impact.
-            Purchase a full audit for $49 (one time) to see exactly which orders and payouts
-            are affected, with a plain-English explanation for each.
+            Purchase a full audit to see exactly which orders and payouts are affected, with a
+            plain-English explanation for each.
           </s-paragraph>
           <s-button
             onClick={() => fetcher.submit({}, { method: "POST" })}
             {...(isRequesting ? { loading: true } : {})}
           >
-            Purchase full audit — $49
+            Purchase full audit — {priceLabel}
           </s-button>
         </s-stack>
       </s-banner>
@@ -374,14 +543,11 @@ export default function ReconciliationReport() {
     );
   }
 
-  const { summary, dataErrors, dataIncomplete, hasPayoutsAccount } = data;
-  const { issueCount, totalImpact, matchedOrderCount, matchedPayoutCount } = summary;
-
-  const missingDataSources = Object.entries(dataErrors)
+  const missingDataSources = Object.entries(data.dataErrors)
     .filter(([, hasError]) => hasError)
     .map(([key]) => MISSING_DATA_LABELS[key] ?? key);
 
-  const dataWarning = dataIncomplete ? (
+  const dataWarning = data.dataIncomplete ? (
     <s-section>
       <s-banner heading="Some data couldn't be loaded" tone="warning">
         <s-paragraph>
@@ -393,11 +559,32 @@ export default function ReconciliationReport() {
     </s-section>
   ) : null;
 
+  if (data.clean) {
+    // Nothing was found, so there's nothing to sell — no CTA, no paywall,
+    // no billing touched at all for this shop's visit.
+    return (
+      <s-page heading="Reconciliation report">
+        {dataWarning}
+        <s-section>
+          <s-banner heading="Your books look clean — no discrepancies found" tone="success">
+            <s-paragraph>
+              {data.matchedOrderCount} orders and {data.matchedPayoutCount} payouts matched
+              cleanly. Nothing to review, and nothing to pay for.
+            </s-paragraph>
+          </s-banner>
+        </s-section>
+      </s-page>
+    );
+  }
+
+  const { summary, hasPayoutsAccount } = data;
+  const { totalImpact, matchedOrderCount, matchedPayoutCount, issueCount } = summary;
+
   if (!data.unlocked) {
     return (
       <s-page heading="Reconciliation report">
         {dataWarning}
-        <PurchaseBanner issueCount={issueCount} />
+        <PurchaseBanner summary={summary} currentPlan={data.currentPlan} />
       </s-page>
     );
   }
@@ -408,17 +595,11 @@ export default function ReconciliationReport() {
 
       <s-section>
         <s-banner
-          heading={
-            issueCount === 0
-              ? "No discrepancies found"
-              : `Estimated dollar impact: ${formatMoney(totalImpact, REPORT_CURRENCY)}`
-          }
-          tone={issueCount === 0 ? "success" : "critical"}
+          heading={`Estimated dollar impact: ${formatMoney(totalImpact, REPORT_CURRENCY)}`}
+          tone="critical"
         >
           <s-paragraph>
-            {issueCount === 0
-              ? `Everything checked out — ${matchedOrderCount} orders and ${matchedPayoutCount} payouts matched cleanly.`
-              : `${issueCount} issue${issueCount === 1 ? "" : "s"} found below, on top of ${matchedOrderCount} orders and ${matchedPayoutCount} payouts that matched cleanly.`}
+            {`${issueCount} issue${issueCount === 1 ? "" : "s"} found below, on top of ${matchedOrderCount} orders and ${matchedPayoutCount} payouts that matched cleanly.`}
           </s-paragraph>
         </s-banner>
       </s-section>

@@ -17,6 +17,14 @@ import type {
 // matched against orders directly — they only exist here so a Deposit's
 // LinkedTxn can be resolved back to something with a customer/reference on
 // it (see matchSettlement).
+//
+// No `.server` suffix: this module is pure logic (the two `import type`s
+// above are erased at compile time, so nothing Node-specific ever ends up
+// here), and reconcile-copy.ts — which does need to run client-side to
+// render the report — imports the impact functions from here as values.
+// Naming this `.server.ts` would make React Router treat the whole file as
+// server-only and refuse to include it in the client bundle, breaking any
+// route component that (transitively) needs it.
 
 export type Source = "shopify" | "quickbooks";
 export type RecordType =

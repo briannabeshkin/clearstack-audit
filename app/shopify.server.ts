@@ -7,12 +7,23 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import {
+  FULL_AUDIT_INTRO_PRICE,
+  FULL_AUDIT_PLAN_INTRO,
+  FULL_AUDIT_PLAN_REGULAR,
+  FULL_AUDIT_REGULAR_PRICE,
+} from "./billing-shared";
 
-// A single one-time $49 purchase that unlocks the itemized findings on the
-// reconciliation report. The free tier (no purchase) still shows the issue
-// count and total dollar impact — see app._index.tsx's loader for the gate
-// and app/routes/app._index.tsx's action for where the purchase is made.
-export const FULL_AUDIT_PLAN = "Full audit";
+// A one-time purchase that unlocks the itemized findings on the
+// reconciliation report. The free preview (no purchase) still shows the
+// issue count and total dollar impact — see app/routes/app._index.tsx's
+// loader for the gate and its action for where the purchase is made.
+//
+// Two plans exist because pricing is tiered: the first 50 audits sold
+// (tracked in billing.server.ts) go for FULL_AUDIT_INTRO_PRICE, after
+// which new purchases move to FULL_AUDIT_REGULAR_PRICE. The Billing API
+// prices a plan statically by name, so tiering requires two named plans
+// rather than one plan with a variable amount.
 
 // Real card charges must never happen outside of a genuine production
 // deploy — this must read `false` for the App Store submission build.
@@ -31,8 +42,13 @@ const shopify = shopifyApp({
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   billing: {
-    [FULL_AUDIT_PLAN]: {
-      amount: 49,
+    [FULL_AUDIT_PLAN_INTRO]: {
+      amount: FULL_AUDIT_INTRO_PRICE,
+      currencyCode: "USD",
+      interval: BillingInterval.OneTime,
+    },
+    [FULL_AUDIT_PLAN_REGULAR]: {
+      amount: FULL_AUDIT_REGULAR_PRICE,
       currencyCode: "USD",
       interval: BillingInterval.OneTime,
     },

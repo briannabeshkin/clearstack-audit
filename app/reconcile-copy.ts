@@ -1,15 +1,16 @@
 // Turns a RevenueFinding/SettlementFinding into merchant-facing copy: a
 // headline, a plain-English explanation, a severity tone for the UI, and the
 // dollar amount to show alongside it. This is intentionally separate from
-// reconcile.server.ts — that module's `detail` strings are precise/technical
+// reconcile.ts — that module's `detail` strings are precise/technical
 // traces; this is the "written for a merchant, not an accountant" layer on
-// top, and it's meant to also run client-side (hence no `.server` suffix).
+// top, and it's meant to also run client-side (hence no `.server` suffix on
+// either file).
 import type {
   NormalizedTransaction,
   RevenueFinding,
   SettlementFinding,
-} from "./reconcile.server";
-import { revenueFindingImpact, settlementFindingImpact } from "./reconcile.server";
+} from "./reconcile";
+import { revenueFindingImpact, settlementFindingImpact } from "./reconcile";
 
 export type FindingTone = "critical" | "warning" | "info" | "success";
 

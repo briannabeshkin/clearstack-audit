@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "aee2182b88462bd8d659223c1f717ae4"
+client_id = "1ac8b490b0db536181e65ed4ec217198"
 name = "clearstack-audit"
 application_url = "https://example.com"
 embedded = true
@@ -21,17 +21,23 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
   # Mandatory GDPR/compliance webhooks — required for App Store submission.
+  # These use `compliance_topics`, not `topics`: Shopify validates that only
+  # the three privacy-compliance topics (customers/data_request,
+  # customers/redact, shop/redact) go in this field, and registers them
+  # through a separate mechanism from regular webhook topics even though
+  # the topic strings themselves are unchanged (lowercase, slash-separated
+  # — same as always, not uppercase/underscored).
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/data_request"
-  topics = [ "customers/data_request" ]
+  compliance_topics = [ "customers/data_request" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/redact"
-  topics = [ "customers/redact" ]
+  compliance_topics = [ "customers/redact" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/shop/redact"
-  topics = [ "shop/redact" ]
+  compliance_topics = [ "shop/redact" ]
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
