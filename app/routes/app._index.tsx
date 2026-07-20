@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { appendFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate, BILLING_IS_TEST } from "../shopify.server";
@@ -148,19 +146,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       details.errorData = (error as { errorData: unknown }).errorData;
     }
 
-    // The CLI's log panel has been swallowing/scrolling past plain
-    // console.error output for this, so write it straight to a file in the
-    // project root instead — no terminal scrollback needed, just read
-    // billing-debug.log directly. Best-effort: if the write itself fails
-    // for some reason, fall back to console.error rather than lose the
-    // failure entirely, and never let logging itself break the request.
-    const line = `${JSON.stringify(details)}\n`;
-    try {
-      appendFileSync(join(process.cwd(), "billing-debug.log"), line);
-    } catch {
-      console.error("[billing action] billing.request() failed:", details);
-    }
-
+    console.error("[billing action] billing.request() failed:", details);
     throw error;
   }
 };

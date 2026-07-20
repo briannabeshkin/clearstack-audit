@@ -98,8 +98,8 @@ export default function Privacy() {
         <p>
           Questions about this policy or how ClearStack Audit handles data can be sent
           to{" "}
-          <a href="mailto:privacy@clearstack-audit.example">
-            privacy@clearstack-audit.example
+          <a href="mailto:brianna.beshkin@gmail.com">
+            brianna.beshkin@gmail.com
           </a>
           .
         </p>

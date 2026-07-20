@@ -25,12 +25,16 @@ import {
 // prices a plan statically by name, so tiering requires two named plans
 // rather than one plan with a variable amount.
 
-// Real card charges must never happen outside of a genuine production
-// deploy — this must read `false` for the App Store submission build.
-// NODE_ENV is "production" in a deployed build and "development" under
-// `shopify app dev`, so this defaults safely without anyone needing to
-// remember to flip a hardcoded flag.
-export const BILLING_IS_TEST = process.env.NODE_ENV !== "production";
+// Deliberately controlled by its own env var, not derived from NODE_ENV.
+// Hosts set NODE_ENV=production automatically as part of a normal deploy
+// (Vercel does this without being asked), which would have silently
+// flipped real billing on the moment this app went live — an easy way to
+// start charging real money by accident. Requiring a separate, explicit
+// var means going live with real charges takes a deliberate action, and
+// the safe state (test mode) is what you get if you forget to set
+// anything at all: BILLING_TEST_MODE must be set to the literal string
+// "false" to turn test mode off.
+export const BILLING_IS_TEST = process.env.BILLING_TEST_MODE !== "false";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,

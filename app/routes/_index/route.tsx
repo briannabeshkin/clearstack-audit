@@ -21,9 +21,11 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>Know before your bookkeeper does.</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          ClearStack Audit cross-checks your Shopify orders and payouts against QuickBooks
+          Online and flags what doesn&apos;t line up — in plain English, with dollar amounts.
+          Read-only: it never writes anything back to either system.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -39,16 +41,16 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Missing orders.</strong> Orders paid in Shopify with no matching record in
+            QuickBooks, so they never quietly fall out of your books.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Duplicates and conflicts.</strong> Orders recorded more than once, or QuickBooks
+            reference numbers that don&apos;t line up.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Payout mismatches.</strong> Shopify payouts with no matching QuickBooks deposit,
+            or a deposit for the wrong amount.
           </li>
         </ul>
       </div>
