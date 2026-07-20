@@ -5,12 +5,24 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+// Postgres in every environment (Neon locally and in production) rather
+// than SQLite locally / Postgres in prod — a provider mismatch between dev
+// and prod is exactly the kind of thing that passes every local test and
+// then breaks in a way that's hard to reproduce.
+//
+// url: the pooled connection string, used by Prisma Client at runtime.
+// Serverless functions (Vercel) can spin up many concurrent instances, and
+// each one opens its own connections — going through a pooler (Neon's
+// built-in PgBouncer) keeps that from exhausting the database's direct
+// connection limit.
+// directUrl: the unpooled connection string, used only by the Prisma CLI
+// (`migrate`, `db push`, etc.). Migrations use advisory locks that aren't
+// supported through a transaction-mode pooler, so they need a direct
+// connection.
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Session {

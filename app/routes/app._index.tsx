@@ -212,6 +212,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
   const dataIncomplete = Object.values(dataErrors).some(Boolean);
 
+  // A source failing to load can just as easily be hiding a real
+  // discrepancy as not — "0 issues found" from a partial pull isn't
+  // evidence the books are clean, it's evidence we didn't finish checking.
+  // Bail out before computing any findings, dollar totals, or billing: show
+  // only the error state, never a clean bill of health or a report built on
+  // data we know is incomplete.
+  if (dataIncomplete) {
+    return {
+      connected: true as const,
+      clean: false as const,
+      incomplete: true as const,
+      hasPayoutsAccount,
+      dataErrors,
+      dataIncomplete,
+    };
+  }
+
   const { revenue, settlement } = reconcile({
     orders: ordersResult.rows,
     payouts,
@@ -249,6 +266,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return {
       connected: true as const,
       clean: true as const,
+      incomplete: false as const,
       matchedOrderCount,
       matchedPayoutCount,
       hasPayoutsAccount,
@@ -300,6 +318,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return {
       connected: true as const,
       clean: false as const,
+      incomplete: false as const,
       unlocked: false as const,
       summary,
       currentPlan,
@@ -312,6 +331,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     connected: true as const,
     clean: false as const,
+    incomplete: false as const,
     unlocked: true as const,
     summary,
     hasPayoutsAccount,
@@ -558,6 +578,17 @@ export default function ReconciliationReport() {
       </s-banner>
     </s-section>
   ) : null;
+
+  if (data.incomplete) {
+    // One or more sources failed to load — show only the error banner.
+    // No clean state, no dollar total, no paywall: any of those would be
+    // making a claim about data we didn't actually see.
+    return (
+      <s-page heading="Reconciliation report">
+        {dataWarning}
+      </s-page>
+    );
+  }
 
   if (data.clean) {
     // Nothing was found, so there's nothing to sell — no CTA, no paywall,

@@ -84,6 +84,17 @@ export default function Settings() {
           )}
         </s-stack>
       </s-section>
+
+      <s-section heading="Privacy">
+        <s-paragraph>
+          Read-only access, what data we access, and how long we keep it —
+          see the{" "}
+          <s-link href="/privacy" target="_blank">
+            privacy policy
+          </s-link>
+          .
+        </s-paragraph>
+      </s-section>
     </s-page>
   );
 }
