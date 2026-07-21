@@ -8,7 +8,20 @@ import styles from "./styles.module.css";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
 
-  if (url.searchParams.get("shop")) {
+  // Any of these indicate the request is coming from inside the Shopify
+  // admin — an embedded load of an already-installed app — rather than a
+  // standalone visit to this public marketing/login page. Hand off to
+  // /app immediately, which does the actual session verification via
+  // authenticate.admin(). `host` (the base64 admin URL) is what Shopify
+  // reliably sends on every embedded load via App Bridge's session-token
+  // flow; a bare `shop` param isn't guaranteed to be present on its own,
+  // which is what let embedded loads fall through to this page instead of
+  // routing straight to the report.
+  if (
+    url.searchParams.get("host") ||
+    url.searchParams.get("shop") ||
+    url.searchParams.get("embedded")
+  ) {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 
