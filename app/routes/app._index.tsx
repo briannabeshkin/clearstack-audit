@@ -616,10 +616,36 @@ export default function ReconciliationReport() {
           tone="critical"
         >
           <s-paragraph>
-            {`${issueCount} issue${issueCount === 1 ? "" : "s"} found below, on top of ${matchedOrderCount} orders and ${matchedPayoutCount} payouts that matched cleanly.`}
+            Each issue below lists the affected orders or payouts, with a plain-English
+            explanation and the dollar amount involved.
           </s-paragraph>
         </s-banner>
       </s-section>
+
+      <s-section>
+        <s-grid gridTemplateColumns="1fr 1fr 1fr" gap="base">
+          <s-box padding="base" borderWidth="small" borderRadius="base" background="subdued">
+            <s-stack direction="block" gap="small-200">
+              <s-text color="subdued">Issues found</s-text>
+              <s-heading>{issueCount}</s-heading>
+            </s-stack>
+          </s-box>
+          <s-box padding="base" borderWidth="small" borderRadius="base" background="subdued">
+            <s-stack direction="block" gap="small-200">
+              <s-text color="subdued">Orders matched cleanly</s-text>
+              <s-heading>{matchedOrderCount}</s-heading>
+            </s-stack>
+          </s-box>
+          <s-box padding="base" borderWidth="small" borderRadius="base" background="subdued">
+            <s-stack direction="block" gap="small-200">
+              <s-text color="subdued">Payouts matched cleanly</s-text>
+              <s-heading>{matchedPayoutCount}</s-heading>
+            </s-stack>
+          </s-box>
+        </s-grid>
+      </s-section>
+
+      <s-divider />
 
       <FindingSection
         heading="Missing orders"

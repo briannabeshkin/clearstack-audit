@@ -1,73 +1,267 @@
-.index {
-  align-items: center;
+.page {
+  /*
+   * Polaris-inspired tokens, hand-declared rather than imported from the
+   * Polaris/App Bridge packages: this route renders outside the embedded
+   * admin shell (no AppProvider, no App Bridge script), so the s-* web
+   * components used everywhere else in the app aren't defined here. Values
+   * below are chosen to sit close to Polaris's own neutral palette and
+   * type scale so the public page and the embedded app read as one product.
+   */
+  --color-bg: #f7f7f7;
+  --color-surface: #ffffff;
+  --color-border: #e3e3e3;
+  --color-border-strong: #d4d4d4;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #5c5f62;
+  --color-accent: #0f5c42;
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius: 10px;
+  --shadow-card: 0 1px 2px rgba(26, 26, 26, 0.04), 0 1px 0 rgba(26, 26, 26, 0.03);
+
   display: flex;
-  justify-content: center;
-  height: 100%;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+.topbar {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.topbarInner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.wordmark {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.main {
+  flex: 1;
+  max-width: 960px;
   width: 100%;
+  margin: 0 auto;
+  padding: 72px 24px 56px;
+}
+
+.hero {
+  max-width: 620px;
+  margin: 0 auto 56px;
   text-align: center;
-  padding: 1rem;
 }
 
-.heading,
-.text {
-  padding: 0;
+.kicker {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.heading {
+  margin: 0 0 16px;
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.subhead {
+  margin: 0 0 4px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.subheadSecondary {
   margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }
 
-.text {
-  font-size: 1.2rem;
-  padding-bottom: 2rem;
-}
-
-.content {
+.cards {
   display: grid;
-  gap: 2rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 56px;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  text-align: left;
+}
+
+.cardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  color: var(--color-accent);
+}
+
+.cardIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.cardTitle {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--color-text);
+}
+
+.cardText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.loginCard {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.loginText {
+  margin-bottom: 16px;
+}
+
+.loginHeading {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.loginSubtext {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
 .form {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin: 0 auto;
-  gap: 1rem;
+  display: block;
 }
 
 .label {
-  display: grid;
-  gap: 0.2rem;
-  max-width: 20rem;
-  text-align: left;
-  font-size: 1rem;
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.fieldRow {
+  display: flex;
+  gap: 8px;
 }
 
 .input {
-  padding: 0.4rem;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+}
+
+.input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.input::placeholder {
+  color: #9a9c9e;
 }
 
 .button {
-  padding: 0.4rem;
+  flex-shrink: 0;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #ffffff;
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.list {
-  list-style: none;
-  padding: 0;
-  padding-top: 3rem;
-  margin: 0;
-  display: flex;
-  gap: 2rem;
+.button:hover {
+  background: #333333;
 }
 
-.list > li {
-  max-width: 20rem;
-  text-align: left;
+.footer {
+  border-top: 1px solid var(--color-border);
 }
 
-@media only screen and (max-width: 50rem) {
-  .list {
-    display: block;
+.footerText {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.footerLink {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footerLink:hover {
+  color: var(--color-text);
+}
+
+@media only screen and (max-width: 760px) {
+  .heading {
+    font-size: 32px;
   }
 
-  .list > li {
-    padding-bottom: 1rem;
+  .subhead {
+    font-size: 16px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    padding: 48px 20px 40px;
+  }
+
+  .fieldRow {
+    flex-direction: column;
+  }
+
+  .button {
+    width: 100%;
   }
 }

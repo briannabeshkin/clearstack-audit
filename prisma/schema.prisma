@@ -14,15 +14,20 @@ generator client {
 // Serverless functions (Vercel) can spin up many concurrent instances, and
 // each one opens its own connections — going through a pooler (Neon's
 // built-in PgBouncer) keeps that from exhausting the database's direct
-// connection limit.
+// connection limit. (app/db.server.ts additionally appends
+// pgbouncer=true&connection_limit=1 to this at runtime, since the
+// Neon-Vercel integration that injects DATABASE_URL doesn't include those
+// params itself.)
 // directUrl: the unpooled connection string, used only by the Prisma CLI
 // (`migrate`, `db push`, etc.). Migrations use advisory locks that aren't
 // supported through a transaction-mode pooler, so they need a direct
-// connection.
+// connection. Named DATABASE_URL_UNPOOLED, not DIRECT_URL, to match what
+// the Neon-Vercel integration actually injects — using its real name means
+// this works with zero manual env var setup in Vercel.
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Session {
