@@ -18,7 +18,8 @@
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "node --experimental-strip-types --test app/reconcile.test.ts app/report-state.test.ts"
   },
   "type": "module",
   "engines": {

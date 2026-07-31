@@ -30,6 +30,7 @@ import {
   type RevenueFinding,
   type SettlementFinding,
 } from "../reconcile";
+import { determineReportState } from "../report-state";
 import {
   describeRevenueFinding,
   describeSettlementFinding,
@@ -296,7 +297,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     breakdown,
   };
 
-  if (!hasActivePayment) {
+  // At this point dataIncomplete is false and issueCount > 0 (both handled
+  // by early returns above), so this can only resolve to "locked" or
+  // "unlocked" — see app/report-state.ts and its tests for the full
+  // decision table, including the incomplete/clean cases handled earlier.
+  const reportState = determineReportState({ dataIncomplete, issueCount, hasActivePayment });
+
+  if (reportState === "locked") {
     // Free preview: the dollar total and issue breakdown are enough to show
     // there's something worth paying to see, but the itemized findings —
     // the actual product — are withheld from the response entirely rather

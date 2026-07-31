@@ -1,0 +1,22 @@
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Solid field, deep green matching the app's accent color -->
+  <rect x="0" y="0" width="1200" height="1200" fill="#0F5C42" />
+
+  <!-- Back card: outline only, so the field shows straight through it —
+       reads as a second record sitting behind the front one without being
+       a filled/opaque shape itself. -->
+  <rect x="330" y="330" width="500" height="500" rx="56" fill="none" stroke="#FFFFFF" stroke-width="20" />
+
+  <!-- Front card: the primary focal shape -->
+  <rect x="370" y="370" width="500" height="500" rx="56" fill="#FFFFFF" />
+
+  <!-- Bold checkmark cut in the same deep green as the field, reading as "verified" -->
+  <path
+    d="M 480 630 L 575 715 L 775 470"
+    fill="none"
+    stroke="#0F5C42"
+    stroke-width="66"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

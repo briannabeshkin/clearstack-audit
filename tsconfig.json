@@ -9,6 +9,12 @@
     "removeComments": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    // Test files run directly under Node's native test runner
+    // (--experimental-strip-types), which needs explicit .ts extensions in
+    // relative imports to resolve them at runtime — Vite's own bundling
+    // doesn't need this and isn't affected by it. Only valid because noEmit
+    // is set above.
+    "allowImportingTsExtensions": true,
     "allowJs": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
