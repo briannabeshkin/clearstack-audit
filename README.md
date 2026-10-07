@@ -2,40 +2,47 @@
 
 ClearStack is a read-only Shopify app that helps merchants identify discrepancies between their Shopify and QuickBooks data.
 
-I built it after researching problems merchants experienced when changes to accounting integrations left orders and financial records inconsistent across systems.
+I built ClearStack after researching problems merchants experienced when changes to accounting integrations left orders and financial records inconsistent across systems.
 
 ## What it does
 
-ClearStack connects Shopify and QuickBooks data and flags potential reconciliation issues including:
+ClearStack connects Shopify and QuickBooks and compares financial records across the two systems to surface potential reconciliation issues, including:
 
-- Missing orders
-- Duplicate or conflicting records
+- Missing or unmatched transactions
 - Amount mismatches
-- Payout gaps
+- Duplicate or conflicting records
+- Payout and deposit discrepancies
 
-Each issue includes the relevant transaction information, confidence level, and a plain-English explanation.
+Each finding includes the relevant transaction information, dollar impact, confidence level, and a plain-English explanation of what appears to be wrong.
 
 ## Product approach
 
 I designed ClearStack as an audit layer rather than another synchronization tool.
 
-The app is intentionally read-only so merchants can investigate discrepancies without giving the product permission to modify their accounting records.
+The app is intentionally read-only so merchants can investigate discrepancies without giving it permission to modify their accounting records.
 
-For reconciliation, I use deterministic matching logic rather than an LLM. Financial discrepancies need to be reproducible, so the same records should produce the same result every time.
+The reconciliation engine uses deterministic logic rather than an LLM. Financial discrepancies need to be reproducible, so the same records should produce the same result every time.
 
-AI is instead used after a discrepancy has been identified to explain the issue to the merchant in plain English.
+ClearStack normalizes transactions across Shopify and QuickBooks and matches them using signals including transaction references, amounts, dates, and relationships between records. Matching rules use different tolerance levels depending on the strength of the available evidence.
 
-The matching system also uses confidence tiers to distinguish clear discrepancies from records that may require review.
+This allows ClearStack to distinguish high-confidence discrepancies from transactions that may simply require further review.
 
 ## Built with
 
 - TypeScript
-- React Router
-- Shopify APIs
-- QuickBooks API
-- PostgreSQL / Prisma
-- LLM API for discrepancy explanations
+- React + React Router
+- Shopify APIs / GraphQL
+- QuickBooks Online API + OAuth
+- Prisma
+- PostgreSQL (Neon)
+- Vercel
+
+## Development
+
+I built ClearStack using AI-assisted development tools while defining the product behavior, reconciliation approach, architecture, and user experience.
+
+The project includes the full Shopify and QuickBooks connection flows, cross-system reconciliation logic, merchant-facing reporting, billing, and Shopify privacy/compliance handling.
 
 ## Status
 
-Submitted to the Shopify App Store for review.
+Deployed and submitted to the Shopify App Store for review.
